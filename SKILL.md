@@ -6,7 +6,7 @@ author: qilan
 
 # Miniapp Bootstrap
 
-This skill guides an agent to initialize a mini program project with a consistent engineering baseline. It is optimized for WeChat mini programs while leaving room for H5 and App targets through uni-app.
+This skill guides an agent to initialize a mini program project with a consistent engineering baseline. It is optimized for the native WeChat mini program runtime and uses the platform's own WXML, WXSS, JavaScript, and JSON files.
 
 Use this skill when the user asks to:
 
@@ -24,10 +24,11 @@ Unless the user explicitly requests otherwise, use this stack:
 
 ```text
 Frontend:
-  uni-app
-  Vue 3
-  TypeScript
-  Pinia
+  Native WeChat Mini Program
+  WXML
+  WXSS
+  Native JavaScript
+  Native wx.* APIs
 
 Backend:
   NestJS
@@ -43,7 +44,9 @@ Engineering:
   Monorepo
 ```
 
-Prefer uni-app for the frontend because the primary target is WeChat mini program while retaining H5/App portability. Do not switch to native WXML/WXSS/JavaScript, Taro, React, Express, MongoDB, or another stack unless the user asks or the requirement cannot reasonably be satisfied by the default stack.
+Use the native WeChat mini program implementation for the frontend. Do not introduce uni-app, Vue, React, Taro, Pinia, or another cross-platform framework or compiler. Frontend code should use WXML for templates, WXSS for styles, native JavaScript for page and component logic, JSON for runtime configuration, and native `wx.*` APIs for platform capabilities.
+
+Treat the frontend as a native `miniprogram` runtime project, not as a Node.js application running inside the mini program. Node.js may be used for local tooling or the backend, but do not import Node.js-only modules such as `fs`, `path`, `http`, or `process` into frontend page, component, or utility code.
 
 ## Architecture Levels
 
@@ -71,19 +74,17 @@ For a full baseline, create:
 my-miniapp/
 ├── apps/
 │   ├── client/
-│   │   ├── src/
-│   │   │   ├── pages/
-│   │   │   ├── components/
-│   │   │   ├── composables/
-│   │   │   ├── stores/
-│   │   │   ├── services/
-│   │   │   ├── utils/
-│   │   │   ├── constants/
-│   │   │   ├── types/
-│   │   │   └── App.vue
-│   │   ├── pages.json
-│   │   ├── manifest.json
-│   │   └── package.json
+│   │   ├── pages/
+│   │   ├── components/
+│   │   ├── services/
+│   │   ├── utils/
+│   │   ├── constants/
+│   │   ├── types/
+│   │   ├── app.js
+│   │   ├── app.json
+│   │   ├── app.wxss
+│   │   ├── project.config.json
+│   │   └── package.json             # only when frontend tooling needs it
 │   └── server/
 │       ├── src/
 │       │   ├── modules/
@@ -109,6 +110,7 @@ my-miniapp/
 ├── .ai/
 ├── AGENTS.md
 ├── README.md
+├── changelogs.md
 ├── package.json
 ├── pnpm-workspace.yaml
 └── tsconfig.json
@@ -123,7 +125,7 @@ Follow this order:
 1. Understand the product goal, target users, primary pages, and required platform capabilities.
 2. Choose Level 1, Level 2, or Level 3 and state the reason briefly.
 3. Initialize the pnpm monorepo only if the chosen level needs more than one app/package.
-4. Initialize the frontend with uni-app, Vue 3, TypeScript, and Pinia.
+4. Initialize the frontend as a native `miniprogram` project with WXML, WXSS, JavaScript, and JSON files. Use Node.js only for optional local tooling, never as the frontend runtime.
 5. Initialize the backend with NestJS only when server-side capability is required.
 6. Initialize Prisma and MySQL only when persistent relational data is required.
 7. Create shared-types when frontend and backend share API contracts.
@@ -145,6 +147,7 @@ docs/architecture.md      System architecture, data flow, module boundaries
 docs/conventions.md       Coding, naming, API, database, and testing conventions
 docs/glossary.md          Business terms when terminology matters
 docs/integrations.md      WeChat, payment, OSS, map, OCR, or other external systems
+changelogs.md             Repository-level change history and release notes
 specs/<change>/           Requirement-specific discovery/design/task docs
 .ai/context.md            Current agent working context
 .ai/decisions.md          Important architecture decisions
@@ -156,6 +159,7 @@ Source of truth rules:
 - `AGENTS.md` defines project-level agent behavior and constraints.
 - `docs/architecture.md` owns architecture decisions.
 - `docs/conventions.md` owns engineering conventions.
+- `changelogs.md` owns the repository-level history of meaningful changes.
 - `prisma/schema.prisma` owns database structure.
 - `packages/shared-types` owns shared API and business types.
 
@@ -163,11 +167,14 @@ Do not write secrets into documentation.
 
 ## Frontend Rules
 
-Use Vue 3 Composition API:
+Use the native WeChat mini program page and component model. Keep frontend source compatible with the mini program runtime and avoid Node.js-only APIs:
 
-```vue
-<script setup lang="ts">
-</script>
+```text
+pages/home/
+├── home.js
+├── home.json
+├── home.wxml
+└── home.wxss
 ```
 
 Pages are responsible for:
@@ -178,23 +185,25 @@ Pages are responsible for:
 - calling business services
 - simple page data assembly
 
-Pages must not contain complex business logic, database access, or scattered raw requests.
+Pages and components must not contain complex business logic, database access, or scattered raw requests.
 
 Centralize API access:
 
 ```text
 Page
   ↓
-Business service in apps/client/src/services
+Business service in apps/client/services
   ↓
 Request client
   ↓
 Backend API
 ```
 
-The request client should handle base URL, token, headers, timeout, HTTP errors, business errors, login expiration, and retry policy where needed.
+The request client should use native `wx.request` and handle base URL, token, headers, timeout, HTTP errors, business errors, login expiration, and retry policy where needed.
 
-Use Pinia only for cross-page or cross-component shared state. Keep temporary state in `ref`, `reactive`, or `computed`.
+Use `App` instance state, dedicated store modules, or explicitly scoped shared utilities for cross-page state. Keep temporary state in `Page` or `Component` data and properties. Do not introduce Pinia or another state-management framework.
+
+Do not add a frontend build step merely to provide Vue, JSX, TypeScript, or cross-platform compatibility. If a local build or packaging script is required, keep it outside the runtime source and document the generated output and verification command.
 
 ## Backend Rules
 
@@ -418,6 +427,8 @@ tasks.md
 test-contract.md
 change-log.md
 ```
+
+Update `changelogs.md` for every meaningful architecture, behavior, dependency, or documentation change. Keep entries grouped by date and use concise Added, Changed, Fixed, or Removed sections.
 
 ## Verification
 
